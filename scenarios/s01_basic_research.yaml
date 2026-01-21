@@ -1,0 +1,8 @@
+id: "s01_basic_research"
+goal_prompt: "Research topic X and write 3 bullets with citations."
+allowed_tools:
+  - name: web_fetch
+  - name: summarize
+  - name: write_draft
+assertions:
+  max_tool_calls: 8
