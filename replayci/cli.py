@@ -30,7 +30,8 @@ def run(
     scenario_path: Path = typer.Argument(..., help="Path to the scenario YAML file"),
     mode: str = typer.Option("record", help="Execution mode: record or replay"),
     out: Path = typer.Option(Path("runs"), help="Directory to store run artifacts"),
-    fixtures_dir: Optional[Path] = typer.Option(None, help="Directory containing fixtures (required for replay)")
+    fixtures_dir: Optional[Path] = typer.Option(None, help="Directory containing fixtures (required for replay)"),
+    use_latest_fixtures: bool = typer.Option(False, help="Automatically use latest run fixtures in replay mode")
 ):
     """
     Run a scenario with the agent.
@@ -39,14 +40,32 @@ def run(
         typer.echo(f"Invalid mode: {mode}. Must be 'record' or 'replay'.", err=True)
         raise typer.Exit(code=1)
 
+    # Handle --use-latest-fixtures for replay mode
+    if mode == "replay" and use_latest_fixtures and not fixtures_dir:
+        # Find latest run in runs dir
+        if not out.exists():
+            typer.echo(f"Error: Runs directory '{out}' does not exist.", err=True)
+            raise typer.Exit(code=1)
+        
+        runs = sorted([d for d in out.iterdir() if d.is_dir() and (d / "fixtures").exists()], key=lambda p: p.name, reverse=True)
+        if not runs:
+             typer.echo(f"Error: No valid runs with fixtures found in '{out}'.", err=True)
+             raise typer.Exit(code=1)
+             
+        latest_run = runs[0]
+        fixtures_dir = latest_run / "fixtures"
+        typer.echo(f"Auto-selected latest fixtures: {fixtures_dir}")
+
     # Validate fixtures_dir for replay mode
     if mode == "replay":
         if not fixtures_dir:
-            typer.echo("Error: --fixtures-dir is required in replay mode.", err=True)
+            typer.echo("Error: --fixtures-dir is required in replay mode (or use --use-latest-fixtures).", err=True)
             raise typer.Exit(code=1)
         if not fixtures_dir.exists():
             typer.echo(f"Error: Fixtures directory not found: {fixtures_dir}", err=True)
             raise typer.Exit(code=1)
+        
+        typer.echo(f"replay: loading fixtures from {fixtures_dir}")
 
     # a) Load scenario
     try:
@@ -97,7 +116,7 @@ def run(
         ))
 
         # f) Print summary
-        typer.echo(f"run_id={run_id}, tool_calls={actual_calls}, latency_ms={latency_ms}")
+        typer.echo(f"run_id={run_id}, tool_calls={actual_calls}, latency_ms={latency_ms}, mode={mode}, fixtures_dir={fixtures_dir}")
 
         if not passed:
             typer.echo(f"Gate failed: max_tool_calls (limit {max_calls}, actual {actual_calls})", err=True)
